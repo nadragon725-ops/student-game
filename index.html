@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>역사 한조각 퍼즐</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+    <style>
+        :root { --primary: #3b82f6; --bg: #e0f2fe; }
+        * { box-sizing: border-box; font-family: 'Pretendard', sans-serif; }
+        body { background: var(--bg); margin: 0; padding: 0; min-height: 100vh; display: flex; flex-direction: column; }
+        .app-header { height: 70px; background: white; display: flex; justify-content: space-between; align-items: center; padding: 0 40px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 100; }
+        .header-title { color: var(--primary); font-weight: 900; font-size: 1.6rem; }
+        main { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; }
+        .glass-card { background: white; padding: 40px; border-radius: 30px; box-shadow: 0 20px 40px rgba(0,0,0,0.05); width: 100%; max-width: 800px; }
+        .stage-item { background: #f8fafc; padding: 25px; border-radius: 20px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
+        .pill-btn { padding: 15px 30px; border-radius: 40px; font-weight: 700; cursor: pointer; border: none; display: flex; align-items: center; gap: 10px; font-size: 1.1rem; justify-content: center; transition: 0.2s; text-decoration: none; }
+        .pill-btn.primary { background: #6366f1; color: white; }
+        .puzzle-board { display: grid; gap: 4px; background: #cbd5e1; border: 8px solid white; border-radius: 20px; width: 90vw; height: 90vw; max-width: 600px; max-height: 600px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .puzzle-tile { position: relative; cursor: pointer; border-radius: 4px; }
+        .custom-input { width: 100%; padding: 15px; border-radius: 15px; border: 2px solid #f1f5f9; background: #f8fafc; outline: none; margin-bottom: 20px; font-size: 1.1rem; text-align: center; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script>
+        window.__INITIAL_STAGES__ = [{"name":"1단계","image":"https://i.ibb.co/BK6xv9xb/image.jpg","description":"","gridSize":"2x2"},{"name":"2단계","image":"https://i.ibb.co/wFFpSzNd/image.jpg","description":"","gridSize":"2x2"},{"name":"3단계","image":"https://i.ibb.co/ZzCRZCRr/image.jpg","description":"","gridSize":"2x2"},{"name":"4단계","image":"https://i.ibb.co/WpWvxvyc/image.jpg","description":"","gridSize":"2x2"},{"name":"5단계","image":"https://i.ibb.co/ZRL6f149/image.jpg","description":"","gridSize":"2x2"}];
+        window.__INITIAL_SETTINGS__ = {"teacherEmail":"","imgbbKey":"f182ea2c24de77e8097454d15c2497f9","emailServiceId":"","emailTemplateId":"","emailPublicKey":"","scriptUrl":"https://script.google.com/macros/s/AKfycbwFL40Dr9YCCAemEgVxZuau4N5CEYGUk0IVGSIUYkHPOjKODUdseU7dNUGnPemIi4fK9g/exec"};
+        Babel.registerPreset("react-classic", {
+            presets: [
+                [Babel.availablePresets["react"], { runtime: "classic" }]
+            ]
+        });
+    </script>
+    <script type="text/babel" data-presets="react-classic">
+        const { useState, useEffect, useRef } = React;
+        const initialStages = window.__INITIAL_STAGES__;
+        const initialSettings = window.__INITIAL_SETTINGS__;
+
+        function App() {
+            const [mode, setMode] = useState('intro'); 
+            const [stages, setStages] = useState(initialStages);
+            const [settings, setSettings] = useState(initialSettings);
+            const [currentIdx, setCurrentIdx] = useState(0);
+            const [tiles, setTiles] = useState([]);
+            const [moves, setMoves] = useState(0);
+            const [seconds, setSeconds] = useState(0);
+            const [isCompleted, setIsCompleted] = useState(false);
+            const [showDesc, setShowDesc] = useState(false);
+            const [studentName, setStudentName] = useState('');
+            const [isSubmitSent, setIsSubmitSent] = useState(false);
+            const [stageResults, setStageResults] = useState([]);
+            const [showNumbers, setShowNumbers] = useState(false);
+            const timerRef = useRef(null);
+
+            useEffect(() => {
+                if (mode === 'game' && !isCompleted && !showDesc) {
+                    timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
+                } else { clearInterval(timerRef.current); }
+                return () => clearInterval(timerRef.current);
+            }, [mode, isCompleted, showDesc]);
+
+            const startStage = (idx) => {
+                const nameRegex = /^[가-힣a-zA-Z]{2,}$/;
+                if (mode === 'intro' && !nameRegex.test(studentName.trim())) {
+                    alert("올바른 이름을 2자 이상 입력해주세요. (초성 제외)");
+                    return;
+                }
+                
+                if (isCompleted) {
+                    const newResult = { stage: currentIdx + 1, name: stages[currentIdx].name, moves: moves, time: fmt(seconds) };
+                    setStageResults(prev => {
+                        const filtered = prev.filter(r => r.stage !== (currentIdx + 1));
+                        return [...filtered, newResult];
+                    });
+                }
+
+                const size = parseInt(stages[idx].gridSize[0]);
+                const total = size * size;
+                let newTiles = Array.from({length: total}, (_, i) => i);
+                let emptyIdx = total - 1;
+                for (let i = 0; i < 200; i++) {
+                    const adj = []; const r = Math.floor(emptyIdx / size); const c = emptyIdx % size;
+                    if (r > 0) adj.push(emptyIdx - size); if (r < size - 1) adj.push(emptyIdx + size);
+                    if (c > 0) adj.push(emptyIdx - 1); if (c < size - 1) adj.push(emptyIdx + 1);
+                    const next = adj[Math.floor(Math.random() * adj.length)];
+                    [newTiles[emptyIdx], newTiles[next]] = [newTiles[next], newTiles[emptyIdx]]; emptyIdx = next;
+                }
+                setTiles(newTiles); setMoves(0); setSeconds(0); setIsCompleted(false); setShowDesc(false); setCurrentIdx(idx); setMode('game');
+            };
+
+            const shuffleBoard = () => {
+                const size = parseInt(stages[currentIdx].gridSize[0]);
+                const total = size * size;
+                let newTiles = Array.from({length: total}, (_, i) => i);
+                let emptyIdx = total - 1;
+                for (let i = 0; i < 200; i++) {
+                    const adj = []; const r = Math.floor(emptyIdx / size); const c = emptyIdx % size;
+                    if (r > 0) adj.push(emptyIdx - size); if (r < size - 1) adj.push(emptyIdx + size);
+                    if (c > 0) adj.push(emptyIdx - 1); if (c < size - 1) adj.push(emptyIdx + 1);
+                    const next = adj[Math.floor(Math.random() * adj.length)];
+                    [newTiles[emptyIdx], newTiles[next]] = [newTiles[next], newTiles[emptyIdx]]; emptyIdx = next;
+                }
+                setTiles(newTiles); setIsCompleted(false); setShowDesc(false);
+            };
+
+            const moveTile = (i) => {
+                if (isCompleted || showDesc) return;
+                const size = parseInt(stages[currentIdx].gridSize[0]);
+                const empty = tiles.indexOf(size * size - 1);
+                const r = Math.floor(i / size), c = i % size;
+                const er = Math.floor(empty / size), ec = empty % size;
+                if (Math.abs(r - er) + Math.abs(c - ec) === 1) {
+                    const nt = [...tiles]; [nt[i], nt[empty]] = [nt[empty], nt[i]]; setTiles(nt); setMoves(m => m + 1);
+                    if (nt.every((v, k) => v === k)) { 
+                        setIsCompleted(true); setTimeout(() => setShowDesc(true), 500);
+                        if(window.confetti) window.confetti({ particleCount: 150, spread: 100, origin: { y: 0.6 } });
+                    }
+                }
+            };
+
+  const sendResultToTeacher = async () => {
+    if (!studentName.trim()) return alert("이름을 입력해주세요.");
+    if (isSubmitSent) return;
+
+    const hasEmailJS = settings.emailServiceId && settings.emailTemplateId && settings.emailPublicKey;
+    const hasScriptUrl = !!settings.scriptUrl;
+
+    if (!hasEmailJS && !hasScriptUrl) {
+      alert("선생님 설정이 완료되지 않아 결과를 전송할 수 없습니다. (이메일 또는 구글 시트 설정 필요)");
+      return;
+    }
+
+    setIsSubmitSent(true);
+    try {
+      // EmailJS 로드 및 전송 (설정된 경우)
+      if (hasEmailJS && !window.emailjs) {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js';
+        script.onload = () => {
+          window.emailjs.init(settings.emailPublicKey);
+          doSend();
+        };
+        document.head.appendChild(script);
+      } else {
+        doSend();
+      }
+
+      function doSend() {
+        const finalResults = [...stageResults];
+        if (isCompleted && !finalResults.find(r => r.stage === currentIdx + 1)) {
+           finalResults.push({ stage: currentIdx + 1, name: stages[currentIdx].name, moves: moves, time: fmt(seconds) });
+        }
+
+        let summaryText = "";
+        let totalMoves = 0;
+        let totalSeconds = 0;
+        
+        finalResults.forEach(r => {
+          summaryText += "[" + r.stage + "단계: " + r.name + "]\n- 이동: " + r.moves + "회\n- 시간: " + r.time + "\n\n";
+          totalMoves += r.moves;
+          const parts = r.time.split(':');
+          totalSeconds += parseInt(parts[0]) * 60 + parseInt(parts[1]);
+        });
+
+        const totalTimeStr = fmt(totalSeconds);
+        const dateStr = new Date().toLocaleString('ko-KR');
+        summaryText = "[결과 보고서]\n학생 이름: " + studentName + "\n\n" + summaryText;
+        summaryText += "[요약]\n총 소요시간: " + totalTimeStr + "\n총 이동횟수: " + totalMoves + "회\n날짜: " + dateStr;
+
+        const templateParams = {
+          name: studentName,
+          time: totalTimeStr,
+          moves: totalMoves,
+          date: dateStr,
+          details: summaryText,
+          from_name: studentName,
+          message: summaryText,
+          teacher_email: settings.teacherEmail || '설정안됨'
+        };
+
+        // 구글 시트 직접 전송 (Apps Script URL이 있을 경우)
+        if (hasScriptUrl) {
+          fetch(settings.scriptUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(templateParams)
+          }).then(() => {
+            if (!hasEmailJS) {
+                alert("선생님께 결과가 성공적으로 전달되었습니다! 🎉 (구글 시트)");
+            }
+          }).catch(e => console.error("Sheet Sync Error:", e));
+        }
+
+        // 이메일 전송 (EmailJS가 설정된 경우)
+        if (hasEmailJS) {
+          window.emailjs.send(settings.emailServiceId, settings.emailTemplateId, templateParams)
+            .then(() => {
+              alert("선생님께 이메일로 결과가 성공적으로 전달되었습니다! 🎉");
+            })
+            .catch((err) => {
+              console.error("EmailJS Error:", err);
+              if (!hasScriptUrl) {
+                alert("이메일 전송 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+                setIsSubmitSent(false);
+              }
+            });
+        }
+      }
+    } catch (error) {
+      console.error("Submit Error:", error);
+      setIsSubmitSent(false);
+    }
+  };
+
+  const fmt = (s) => Math.floor(s/60).toString().padStart(2,'0') + ':' + (s%60).toString().padStart(2,'0');
+
+            return (
+                <div style={{minHeight:'100vh', display:'flex', flexDirection:'column'}}>
+                    <header className="app-header">
+                        <div className="header-title">✨ 역사 한조각</div>
+                        <div style={{fontWeight:800, color:'#3b82f6'}}>{mode === 'game' ? '⏱️ ' + fmt(seconds) : '🧩 퍼즐 여행'}</div>
+                    </header>
+                    <main>
+                        {mode === 'intro' ? (
+                            <div className="glass-card" style={{textAlign:'center'}}>
+                                <h1 style={{fontSize:'2.8rem', color:'#1e3a8a', marginBottom:20}}>역사 한조각 🧩</h1>
+                                <p style={{color:'#64748b', marginBottom:30}}>퍼즐 여행을 시작할 이름을 입력해주세요.</p>
+                                <input className="custom-input" placeholder="이름을 입력하세요" value={studentName} onChange={e => setStudentName(e.target.value)} />
+                                <button className="pill-btn primary" style={{width:'100%', padding:20, fontSize:'1.3rem'}} onClick={() => startStage(0)}>시작하기 🚀</button>
+                            </div>
+                        ) : (
+                            <div style={{display:'flex', flexDirection:'column', alignItems:'center', width:'100%'}}>
+                                <div style={{display:'flex', gap:10, marginBottom:20}}>
+                                    <div style={{background:'white', padding:'10px 20px', borderRadius:30, fontWeight:800, color:'#3b82f6', boxShadow:'0 4px 10px rgba(0,0,0,0.05)'}}>📍 {stages[currentIdx].name}</div>
+                                    <div style={{background:'white', padding:'10px 20px', borderRadius:30, fontWeight:800, color:'#f59e0b', boxShadow:'0 4px 10px rgba(0,0,0,0.05)'}}>이동 횟수: {moves}회</div>
+                                </div>
+                                <div className="puzzle-board" style={{gridTemplateColumns: "repeat(" + stages[currentIdx].gridSize[0] + ", 1fr)", gridTemplateRows: "repeat(" + stages[currentIdx].gridSize[0] + ", 1fr)"}}>
+                                    {tiles.map((t, i) => {
+                                        const size = parseInt(stages[currentIdx].gridSize[0]);
+                                        const isEmp = t === (size * size - 1);
+                                        const r = Math.floor(t / size), c = t % size;
+                                        return (
+                                          <div key={i} onClick={() => moveTile(i)} className="puzzle-tile" style={{ backgroundImage: (!isEmp || isCompleted) ? "url(" + stages[currentIdx].image + ")" : "none", backgroundPosition: ((c/(size-1))*100) + "% " + ((r/(size-1))*100) + "%", backgroundSize: (size*100) + "% " + (size*100) + "%", backgroundColor: isEmp ? "#f1f5f9" : "transparent", boxShadow: isEmp ? "inset 0 2px 8px rgba(0,0,0,0.05)" : "none", display:'flex', alignItems:'center', justifyContent:'center' }}>
+                                            {isEmp && !isCompleted && <span style={{fontSize:'2.5rem', opacity: 0.8}}>🐥</span>}
+                                            {showNumbers && !isEmp && !isCompleted && <span style={{background:'rgba(255,255,255,0.8)', padding:'2px 6px', borderRadius:5, fontSize:'0.8rem', fontWeight:800, color:'#1e3a8a'}}>{t + 1}</span>}
+                                          </div>
+                                        );
+                                    })}
+                                </div>
+                                <div style={{display:'flex', gap:10, marginTop:15}}>
+                                    <button onClick={shuffleBoard} className="pill-btn" style={{padding:'8px 15px', fontSize:'0.9rem', background:'#f1f5f9'}}>🔄 다시 섞기</button>
+                                    <button onClick={() => setShowNumbers(!showNumbers)} className="pill-btn" style={{padding:'8px 15px', fontSize:'0.9rem', background: showNumbers ? '#e0f2fe' : '#f1f5f9', color: showNumbers ? '#3b82f6' : '#64748b'}}>{showNumbers ? '🔢 힌트 끄기' : '💡 힌트 켜기'}</button>
+                                </div>
+                                {showDesc && (
+                                    <div className="glass-card" style={{marginTop:30, textAlign:'center'}}>
+                                        <h2 style={{color:'#1e3a8a', marginBottom:15}}>{stages[currentIdx].name} 완료! 🎉</h2>
+                                        <div style={{background:'#f8fafc', padding:25, borderRadius:20, borderLeft:'6px solid #3b82f6', textAlign:'left', marginBottom:25, lineHeight:1.6}}>{stages[currentIdx].description}</div>
+                                        {currentIdx < stages.length - 1 ? (
+                                            <button className="pill-btn primary" style={{width:'100%'}} onClick={() => startStage(currentIdx + 1)}>다음 단계로 이동 ➡️</button>
+                                        ) : (
+                                            <div style={{marginTop:20}}>
+                                                <div style={{padding:20, background:'#ecfdf5', borderRadius:20, color:'#059669', fontWeight:800, marginBottom:15}}>🎊 모든 퍼즐을 맞췄습니다! 수고하셨습니다. 🎊</div>
+                                                {!isSubmitSent ? (
+                                                  <button className="pill-btn primary" style={{width:'100%', padding:20}} onClick={sendResultToTeacher}>결과 제출하기 📤</button>
+                                                ) : (
+                                                  <div style={{padding:15, background:'#f1f5f9', borderRadius:20, color:'#64748b'}}>결과가 성공적으로 제출되었습니다.</div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </main>
+                </div>
+            );
+        }
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
